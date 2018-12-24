@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<title>Conway's Game of Life</title>
+		<style>
+			html, body {
+				height: 100%;
+				margin: 0;
+			}
+			body {
+				background: black;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+			}
+			canvas, section {
+				border: 1px solid white;
+			}
+			section {
+				height: 600px;
+				width: 400px;
+				margin: 25px;
+			}
+			h2, p {
+				font: 15px courier, courier new, serif;
+				color: white;
+				padding: 10px;
+			}
+			p {
+				font-size: 14px;
+			}
+			h3 {
+				font: 20px courier, courier new, serif;
+				padding: 10px;
+			}
+		</style>
+	</head>
+	
+	<body>
+		<section>
+			<h2>Game Mode: <select id="gm" value="sandbox">
+				<option value="sandbox">sandbox</option>
+				<option value="versus">versus</option>
+			</select></h2>
+			<h2>Board Dimensions: <select id="bd" value="8">
+				<option value="6">6 x 6</option>
+				<option value="8">8 x 8</option>
+				<option value="10">10 x 10</option>
+				<option value="12">12 x 12</option>
+				<option value="15">15 x 15</option>
+				<option value="20">20 x 20</option>
+				<option value="25">25 x 25</option>
+			</select></h2>
+			<h2>Board Generation Setting: <select id="bgs" value="blank">
+				<option value="blank">blank</option>
+				<option value="random">random</option>
+			</select></h2>
+			<Input id="changeSettings" type="submit" value="Change Settings/Create New Board" onmousedown="reset()"></Input>
+			<p>Click on any square on the board to change its state. Press spacebar to go through an iteration of the Game of Life. The smaller squares signify what will happen
+			 after one iteration.</p>
+			<p id="explanation">In Conway's Game of Life, an alive square (white) can die from starvation when it has 1 or fewer alive neighbors or from overpopulation
+			when it has 4 or more alive neighbors. A dead (black) square can come to life when it has exactly 3 alive neighbors.</p>
+			
+		</section>
+		
+		<canvas height="600" width = "600" id="game"></canvas>
+		<script>
+			var canvas = document.getElementById('game');
+			var context = canvas.getContext('2d');
+			var bgs = document.getElementById('bgs').value;
+			var turn = 'red';
+			var mode = document.getElementById('gm').value;
+			var dimension = parseInt(document.getElementById('bd').value);
+			var tileSize = 600 / dimension;
+			var board = new Array(dimension);
+			var moveMade = false;
+			var gamewinner = null;
+			for(i=0;i<dimension;i++) {
+				board[i] = new Array(dimension);
+				for(j=0;j<dimension;j++) {
+				var col = "DimGrey";
+					if (.4 > Math.random()) {
+						col = "white";
+					}
+					board[i][j] = {
+						color: col,
+						newColor: null,
+						x: i,
+						y: j
+					}
+				}
+			}
+			calculateNew();
+			paint();
+			function reset() {
+				mode = document.getElementById('gm').value;
+				dimension = parseInt(document.getElementById('bd').value);
+				bgs = document.getElementById('bgs').value;
+				tileSize = 600 / dimension;
+				board = new Array(dimension);
+				moveMade = false;
+				turn = 'red';
+				for(i=0;i<dimension;i++) {
+					board[i] = new Array(dimension);
+				}
+				if (mode === 'sandbox') {
+					document.getElementById('explanation').innerHTML = "In Conway's Game of Life, an alive square (white) can die from starvation when it has 1 or fewer alive neighbors or from overpopulation when it has 4 or more alive neighbors. A dead (black) square can come to life when it has exactly 3 alive neighbors.";
+					for(i=0;i<dimension;i++) {
+						for(j=0;j<dimension;j++) {
+							if (bgs === 'random') {
+								var col = "DimGrey";
+								if (.4 > Math.random()) {
+									col = "white";
+								}
+								board[i][j] = {
+									color: col,
+									newColor: null,
+									x: i,
+									y: j
+								}
+							} else {
+								board[i][j] = {
+									color: 'DimGrey',
+									newColor: null,
+									x: i,
+									y: j
+								}
+							}
+						}
+					}
+				} else {
+					document.getElementById('explanation').innerHTML = "This is a game based off of Conway's Game of Life. Players represented by blue and red take turns making moves by either adding a square of their color to a dead square, or by killing a square of their opponenets color. After every move, an iteration of the Game of Life must be played by pressing spacebar. A player wins if their opponent doesn't have their color remaining on the board. Note: If 3 alive squares surround a dead square, it switches to the color that is most common among those squares.";
+					document.getElementById('bgs').value = 'random';
+					var redNeeded = dimension * dimension * .1;
+					var blueNeeded = dimension * dimension * .1;
+					var sum = dimension * dimension * .5;
+					for(i=0;i<dimension;i++) {
+						for(j=0;j<(dimension + dimension % 2) / 2;j++) {
+							var rand = Math.random();
+							var col = "DimGrey";
+							if (rand < redNeeded / sum) {
+								col = "red";
+								redNeeded--;
+							} else if (rand > 1 - blueNeeded / sum) {
+							col = "blue";
+								blueNeeded--;
+							}
+							sum--;
+							board[i][j] = {
+								color: col,
+								newColor: null,
+								x: i,
+								y: j
+							}
+							board[dimension - i - 1][dimension - 1 - j] = {
+								color: col,
+								newColor: null,
+								x: dimension - i - 1,
+								y: dimension - j - 1
+							}
+						}
+					}
+				}
+				calculateNew();
+				paint();
+			}
+			
+			function calculateNew() {
+				var redAlive = 0;
+				var blueAlive = 0;
+				board.forEach(function(row) {
+					row.forEach(function(tile) {
+						if(tile.color === 'red') {
+							redAlive++;
+						} else if (tile.color === 'blue') {
+							blueAlive++;
+						}
+						var numAlive = 0;
+						var redNumAlive = 0;
+						var edgeTop = false;
+						var edgeBottom = false;
+						var edgeLeft = false;
+						var edgeRight = false;
+						if (tile.x === 0) {
+							edgeLeft = true;
+						} else if (tile.x === dimension - 1) {
+							edgeRight = true;
+						}
+						if (tile.y === 0) {
+							edgeTop = true;
+						} else if (tile.y === dimension - 1) {
+							edgeBottom = true;
+						}
+						if (!edgeTop) {
+							if (!edgeLeft) {
+								if (!(board[tile.x - 1][tile.y - 1].color === 'DimGrey')) {
+									numAlive++;
+									if(board[tile.x - 1][tile.y - 1].color === 'red') {
+										redNumAlive++;
+									}
+								}
+							}
+							if (!(board[tile.x][tile.y - 1].color === 'DimGrey')) {
+								numAlive++;
+								if(board[tile.x][tile.y - 1].color === 'red') {
+									redNumAlive++;
+								}
+							}
+							if (!edgeRight) {
+								if (!(board[tile.x + 1][tile.y - 1].color === 'DimGrey')) {
+									numAlive++;
+									if(board[tile.x + 1][tile.y - 1].color === 'red') {
+										redNumAlive++;
+									}
+								}
+							}
+						}
+						if (!edgeLeft) {
+							if (!(board[tile.x - 1][tile.y].color === 'DimGrey')) {
+								numAlive++;
+								if(board[tile.x - 1][tile.y].color === 'red') {
+									redNumAlive++;
+								}
+							}
+						}
+						if (!edgeRight) {
+							if (!(board[tile.x + 1][tile.y].color === 'DimGrey')) {
+								numAlive++;
+								if(board[tile.x + 1][tile.y].color === 'red') {
+										redNumAlive++;
+								}
+							}
+						}
+						if (!edgeBottom) {
+							if (!edgeLeft) {
+								if (!(board[tile.x - 1][tile.y + 1].color === 'DimGrey')) {
+									numAlive++;
+									if(board[tile.x - 1][tile.y + 1].color === 'red') {
+										redNumAlive++;
+									}
+								}
+							}
+							if (!(board[tile.x][tile.y + 1].color === 'DimGrey')) {
+								numAlive++;
+								if(board[tile.x][tile.y + 1].color === 'red') {
+									redNumAlive++;
+								}
+							}
+							if (!edgeRight) {
+								if (!(board[tile.x + 1][tile.y + 1].color === 'DimGrey')) {
+									numAlive++;
+									if(board[tile.x + 1][tile.y + 1].color === 'red') {
+										redNumAlive++;
+									}
+								}
+							}
+						}
+						if (tile.color === 'DimGrey') {
+							if (numAlive === 3) {
+								if(mode === 'versus') {
+									if(redNumAlive > 1) {
+										tile.newColor = 'red';
+									} else {
+										tile.newColor = 'blue';
+									}
+								} else {
+									tile.newColor = 'white';
+								}
+							} else {
+								tile.newColor = 'DimGrey';
+							}
+						} else {
+							if (numAlive <= 1 || numAlive >= 4) {
+								tile.newColor = 'DimGrey';
+							} else {
+								tile.newColor = tile.color;
+							}
+						}
+					});
+				});
+				if (mode === 'versus') {
+					if (redAlive === 0) {
+						gamewinner = 'red';
+					} else if (blueAlive === 0) {
+						gamewinner = 'blue';
+					}
+				}
+			}
+			
+			function change() {
+				board.forEach(function(row) {
+					row.forEach(function(tile) {
+						tile.color = tile.newColor;
+					});
+				});
+				calculateNew();
+				paint();
+			}
+			
+			function paint() {
+				context.clearRect(0,0,canvas.width,canvas.height);
+				if (gamewinner !== null) {
+					context.font = '25px courier, courier new, serif';
+					context.textAlign = 'center';
+					context.color = 'white';
+					context.fillText("Press Spacebar to Continue", canvas.width / 2, canvas.height * .75);
+					if (gamewinner = 'blue') {
+						context.color = 'blue';
+						context.fillText("Blue won!", canvas.width / 2, canvas.height / 4);
+					} else {
+						context.color = 'red';
+						context.fillText("Red won!", canvas.width / 2, canvas.height / 4);
+					}
+					return;
+				}
+				board.forEach(function(row) {
+					row.forEach(function(tile) {
+						context.fillStyle = tile.color;
+						context.fillRect(tile.x * tileSize + 1,tile.y * tileSize + 1,tileSize - 1, tileSize - 1);
+						context.fillStyle = tile.newColor;
+						context.fillRect(tileSize * (tile.x + 2 /5) + .5, tileSize * (tile.y + 2 /5) + .5, tileSize / 5, tileSize / 5);
+					});
+				});
+			}
+			
+			document.addEventListener('keydown',function(e) {
+				
+				if(e.which === 32) {
+					if(mode === 'sandbox') {
+						change();
+					} else {
+						if(gamewinner !== null) {
+							gamewinner = null;
+							reset();
+							return;
+						}
+						if (moveMade) {
+							change();
+							calculateNew();
+							paint();
+							if (turn === 'blue') {
+								turn = 'red';
+							} else {
+								turn = 'blue';
+							}
+							moveMade = false;
+						}
+					}
+				}
+			});
+			
+			function getMousePos(canv, evt) {
+				var rect = canv.getBoundingClientRect();
+				return {
+					x: evt.clientX - rect.left,
+					y: evt.clientY - rect.top
+				};
+			}
+			
+			canvas.addEventListener('click',function(e) {
+				var mousePos = getMousePos(canvas,e);
+				board.forEach(function(row) {
+					row.forEach(function(tile) {
+						if (mousePos.x > tile.x * tileSize && mousePos.y > tile.y * tileSize && mousePos.x < tileSize * (tile.x + 1) && mousePos.y < tileSize * (tile.y + 1)) {
+							if (mode === 'sandbox') {
+								if (tile.color === 'DimGrey') {
+									tile.color = 'white';
+								} else {
+									tile.color = 'DimGrey';
+								}
+								calculateNew();
+								paint();
+							} else if (!moveMade && mode === 'versus') {
+								moveMade = true;
+								if (turn === 'red') {
+									if (tile.color === 'DimGrey') {
+										tile.color = 'red';
+									} else if (tile.color === 'blue') {
+										tile.color = 'DimGrey';
+									} else {
+									moveMade = false;
+										return;
+									}
+								} else {
+									if (tile.color === 'DimGrey') {
+										tile.color = 'blue';
+									} else if (tile.color === 'red') {
+										tile.color = 'DimGrey';
+									} else {
+									moveMade = false;
+										return;
+									}
+								}
+								
+								calculateNew();
+								paint();
+							}
+						}
+					});
+				});
+			}, false);
+		</script>
+	</body>
+</html>
